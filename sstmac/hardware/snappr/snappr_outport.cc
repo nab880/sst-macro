@@ -1,14 +1,14 @@
 /**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
+Copyright 2009-2021 National Technology and Engineering Solutions of Sandia,
+LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S.  Government 
 retains certain rights in this software.
 
 Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
+by National Technology and Engineering Solutions of Sandia, LLC., a wholly 
+owned subsidiary of Honeywell International, Inc., for the U.S. Department of 
 Energy's National Nuclear Security Administration under contract DE-NA0003525.
 
-Copyright (c) 2009-2022, NTESS
+Copyright (c) 2009-2021, NTESS
 
 All rights reserved.
 
@@ -124,7 +124,7 @@ void
 SnapprOutPort::handleCredit(SnapprCredit* credit)
 {
   addCredits(credit->virtualLane(), credit->numBytes());
-  pkt_debug("crediting port=%d vl=%d with %" PRIu32" credits",
+  printf("SnapprOutPort::handleCredit::crediting port=%d vl=%d with %" PRIu32" credits\n",
             number_, credit->virtualLane(), credit->numBytes());
   delete credit;
   if (!arbitration_scheduled && !empty()){
@@ -184,7 +184,7 @@ SnapprOutPort::send(SnapprPacket* pkt, Timestamp now)
   pkt->accumulateCongestionDelay(now);
 #if SSTMAC_SANITY_CHECK
   if (!link){
-    spkt_abort_printf("trying send on null link going to %d: %s",
+    spkt_abort_printf("trying send on null link going to %d: \n %s\n",
                       pkt->toaddr(), pkt->toString().c_str());
   }
 #endif
@@ -200,24 +200,30 @@ SnapprOutPort::send(SnapprPacket* pkt, Timestamp now)
       if (inports){
         auto& inport = inports[pkt->inport()];
         auto* credit = new SnapprCredit(pkt->byteLength(), pkt->inputVirtualLane(), inport.src_outport);
-        pkt_debug("sending credit to port=%d on vl=%d at t=%8.4e: %s",
+        printf("SnapprOutPort::send::sending credit to port=%d, on vl=%d at t=%8.4e: %s\n",
                   inport.src_outport, pkt->inputVirtualLane(), next_free.sec(), pkt->toString().c_str());
         inport.link->send(time_to_send + flit_overhead, credit);
       }
     } else {
-      //immediately add the credits back - we don't worry about credits here
+      printf("SnapprOutPort::send::immediately add the credits back - we don't worry about credits here\n");
       addCredits(pkt->virtualLane(), pkt->byteLength());
     }
   }
 
   if (notifier_ && pkt->isTail()){
+    printf("SnapprOutPort::send notifier and isTail\n");
     notifier_->notify(next_free, pkt);
   }
+  else{
+    printf("SnapprOutPort::send no notify: notifier %d isTail %d\n", notifier_, pkt->isTail());
+  }
 
-  pkt_debug("packet leaving port=%d vl=%d at t=%8.4e: %s",
+  printf("SnapprOutPort::send leaving port=%d vl=%d \n at t=%8.4e: \n %s",
             number_, pkt->virtualLane(), next_free.sec(), pkt->toString().c_str());
   if (ready()){
+    printf("SnapprOutPort::send ready for arbitration\n");
     scheduleArbitration();
+    printf("SnapprOutPort::send not ready for arbitration\n");
   }
 }
 
@@ -226,13 +232,16 @@ SnapprOutPort::scheduleArbitration()
 {
 #if SSTMAC_SANITY_CHECK
   if (arbitration_scheduled){
-    spkt_abort_printf("arbitration already scheduled on port %s:%d", portName_.c_str(), number_);
+    spkt_abort_printf("arbitration already scheduled on port %s:%d\n", portName_.c_str(), number_);
   }
   if (queueLength() == 0){
-    spkt_abort_printf("scheduling arbitration on port with nothing queued");
+    spkt_abort_printf("scheduling arbitration on port with nothing queued\n");
   }
 #endif
-  pkt_debug("scheduling arbitrate from port %d at t=%8.4e with %d queued",
+  if (arbitration_scheduled){
+    printf("arbitration already scheduled on port %d\n", number_);
+  }
+  printf("scheduling arbitrate from port %d at t=%8.4e with %d queued\n",
             number_, next_free.sec(), queueLength());
   //schedule this port to pull another packet
   auto* ev = newCallback(this, &SnapprOutPort::arbitrate);
@@ -254,7 +263,7 @@ SnapprOutPort::deadlockCheck(SSTMAC_MAYBE_UNUSED int vl)
   if (pkt){
     std::cerr << "Deadlocked on PORT=" << number_ <<   " VL=" << vl << ": " << pkt->toString() << std::endl;
     std::cout << "packet going out VL=" << pkt->virtualLane()
-              << " that came in on VL=" << pkt->inputVirtualLane() << std::endl;
+              << "\n that came in on VL=" << pkt->inputVirtualLane() << std::endl;
     pkt->setDeadlocked();
     link->deliver(pkt);
   }
@@ -266,7 +275,7 @@ SnapprOutPort::requestArbitration()
 {
 #if SSTMAC_SANITY_CHECK
   if (empty()){
-    spkt_abort_printf("SnapprSwitch::arbitrate: incorrectly requesting arbitrate from empty port %s:%d",
+    spkt_abort_printf("SnapprOutPort::arbitrate: incorrectly requesting arbitrate from empty port %s:%d",
                       portName_.c_str(), number_);
   }
   if (arbitration_scheduled){
@@ -274,17 +283,23 @@ SnapprOutPort::requestArbitration()
                       portName_.c_str(), number_);
   }
 #endif
+printf("SnapprOutPort::arbitrate:  %s\n port:%d\n",
+                      portName_.c_str(), number_);
   Timestamp now_ = parent_->now();
   if (next_free > now_){
+    printf("SnapprOutPort::requestArbitration scheduling\n");
     scheduleArbitration();
   } else {
+    printf("SnapprOutPort::requestArbitration arbitrating immediatly\n");
     arbitrate();
+    
   }
 }
 
 void
 SnapprOutPort::arbitrate()
 {
+  printf("SnapprOutPort::arbitrate::starting arbitration\n");
 #if SSTMAC_SANITY_CHECK
   if (empty()){
     spkt_abort_printf("SnapprOutPort::arbitrate: incorrectly arbitrate from empty port %d",
@@ -299,7 +314,7 @@ SnapprOutPort::arbitrate()
   arbitration_scheduled = false;
   if (ready()){
     logQueueDepth();
-    pkt_debug("arbitrating packet from port %d with %d queued",
+    printf("arbitrating packet from port %d with %d queued\n",
               number_, queueLength());
     SnapprPacket* pkt = popReady();
     send(pkt, parent_->now());
@@ -307,7 +322,7 @@ SnapprOutPort::arbitrate()
     if (stall_start.empty()){
       stall_start = parent_->now();
     }
-    pkt_debug("insufficient credits to send on port %d with %d queued",
+    printf("insufficient credits to send on port %d with %d queued\n",
               number_, queueLength());
   }
 }
@@ -328,20 +343,23 @@ SnapprOutPort::logQueueDepth()
 void
 SnapprOutPort::tryToSendPacket(SnapprPacket* pkt)
 {
-  pkt_debug("trying to send payload %s on inport %d:%d going to port %d:%d:%d",
+  printf("SnapprOutPort::tryToSendPacket::\n trying to send payload %s \n on inport %d:%d \n going to port %d:%d:%d\n",
             pkt->toString().c_str(), pkt->inport(), pkt->inputVirtualLane(),
             pkt->nextPort(), pkt->virtualLane(), pkt->deadlockVC());
+
 
   Timestamp now = parent_->now();
   pkt->setArrival(now);
   if (!congestion_){
     TimeDelta time_to_send = pkt->numBytes() * byte_delay;
+    printf("SnapprOutPort::tryToSendPacket time to send:%d byte_delay: %d \n",time_to_send, byte_delay);
     pkt->setTimeToSend(time_to_send);
     link->send(pkt);
   } else {
+    printf("SnapprOutPort: NoCongestion\n");
     logQueueDepth();
     queue(pkt);
-    pkt_debug("incoming packet on port=%d vl=%d -> queue=%d",
+    printf("incoming packet on port=%d vl=%d -> queue=%d\n",
               number_, pkt->virtualLane(), queueLength());
     if (!arbitration_scheduled){
       requestArbitration();
@@ -370,22 +388,20 @@ struct FifoPortArbitrator : public SnapprPortArbitrator
                      const std::vector<int>& /*vls_per_qos*/){}
 
   void insert(uint64_t  /*cycle*/, SnapprPacket *pkt) override {
-#if SSTMAC_SANITY_CHECK
     if (pkt->virtualLane() >= vls_.size()){
-      spkt_abort_printf("got invalid VL=%d, max is %d",
+      printf("got invalid VL=%d, max is %d",
                         pkt->virtualLane(), int(vls_.size() - 1));
     }
-#endif
     VirtualLane& vl = vls_[pkt->virtualLane()];
     vl.occupancy += 1;
     if (vl.credits >= pkt->numBytes()){
-      port_debug("FIFO %p VL %d queueing with %u credits - packet %s",
+      printf("FIFO1 %p VL %d stalling with %u credits - packet %s",
                  this, pkt->virtualLane(), vl.credits, pkt->toString().c_str());
       vl.credits -= pkt->numBytes();
       port_queue_.push(pkt);
     } else {
       vl.pending.push(pkt);
-      port_debug("FIFO %p VL %d stalling with %u credits - packet %s",
+      printf("FIFO2 %p VL %d stalling with %u credits - packet %s",
                  this, pkt->virtualLane(), vl.credits, pkt->toString().c_str());
     }
   }
@@ -437,12 +453,12 @@ struct FifoPortArbitrator : public SnapprPortArbitrator
   void addCredits(int vl, uint32_t credits) override {
     VirtualLane& v = vls_[vl];
     v.credits += credits;
-    port_debug("FIFO %p VL %d adding credits up to %u",
-               this, vl, v.credits);
+    printf("addCredits to VL %d now has %u credits\n",
+                vl, v.credits);
     while (!v.pending.empty() && v.pending.front()->numBytes() <= v.credits){
       SnapprPacket* pkt = v.pending.front();
-      port_debug("FIFO %p VL %d now has enough credits to send packet %s",
-                 this, pkt->virtualLane(), pkt->toString().c_str());
+      printf(" VL %d now has enough credits to send packet\n %s\n",
+                  pkt->virtualLane(), pkt->toString().c_str());
       port_queue_.push(pkt);
       v.credits -= pkt->numBytes();
       v.pending.pop();
@@ -451,12 +467,13 @@ struct FifoPortArbitrator : public SnapprPortArbitrator
 
   SnapprPacket* pop(uint64_t  /*cycle*/) override {
     SnapprPacket* pkt = port_queue_.front();
-    port_debug("FIFO %p VL %d popping packet", this, pkt->virtualLane());
+    printf("SnapprArb::pop %p VL %d popping packet\n", this, pkt->virtualLane());
     port_queue_.pop();
     return pkt;
   }
 
   bool empty() const override {
+    printf("empty::port_queue is: %d, but pending is %d\n",port_queue_.empty(), vls_[0].pending.empty());
     return port_queue_.empty();
   }
 

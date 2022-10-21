@@ -1,14 +1,14 @@
 /**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
+Copyright 2009-2021 National Technology and Engineering Solutions of Sandia, 
+LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S.  Government 
 retains certain rights in this software.
 
 Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
+by National Technology and Engineering Solutions of Sandia, LLC., a wholly 
+owned subsidiary of Honeywell International, Inc., for the U.S. Department of 
 Energy's National Nuclear Security Administration under contract DE-NA0003525.
 
-Copyright (c) 2009-2022, NTESS
+Copyright (c) 2009-2021, NTESS
 
 All rights reserved.
 
@@ -103,10 +103,12 @@ class SnapprPacket :
   }
 
   void setVirtualLane(int vl){
+    printf("SnapprPacket: setting virtual lane %d \n", vl);
     vl_ = vl;
   }
 
   void saveInputVirtualLane(){
+    printf("SnapprPacket: setting input virtual lane %d \n", vl_);
     input_vl_ = vl_;
   }
 
@@ -210,6 +212,7 @@ class SnapprCredit :
     vl_(vl),
     port_(port)
   {
+    printf("SnapprCredit:new num_bytes %d vl %d port %d\n/", num_bytes, vl, port);
   }
 
   int virtualLane() const {

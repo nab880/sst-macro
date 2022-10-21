@@ -1,14 +1,14 @@
 /**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
+Copyright 2009-2021 National Technology and Engineering Solutions of Sandia, 
+LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S.  Government 
 retains certain rights in this software.
 
 Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
+by National Technology and Engineering Solutions of Sandia, LLC., a wholly 
+owned subsidiary of Honeywell International, Inc., for the U.S. Department of 
 Energy's National Nuclear Security Administration under contract DE-NA0003525.
 
-Copyright (c) 2009-2022, NTESS
+Copyright (c) 2009-2021, NTESS
 
 All rights reserved.
 
@@ -214,14 +214,11 @@ SnapprSwitch::connectOutput(int src_outport, int dst_inport, EventLink::ptr&& li
   }
   p->dst_port = dst_inport;
   p->scaleBuffers(scale_factor);
-  switch_debug("connecting output port %d to input port %d with scale=%10.4f byte_delay=%10.5e",
-               src_outport, dst_inport, scale_factor, p->byte_delay.sec());
 }
 
 void
 SnapprSwitch::connectInput(int src_outport, int dst_inport, EventLink::ptr&& link)
 {
-  switch_debug("connecting input port %d to output port %d", dst_inport, src_outport);
   auto& port = inports_[dst_inport];
   if (port.link){
     spkt_abort_printf("Bad connection on switch inport %d:%d -> %d - port already occupied",
@@ -263,12 +260,13 @@ SnapprSwitch::handlePayload(SnapprPacket* pkt, int inport)
     deadlockCheck(pkt->virtualLane());
     return;
   }
-
+  std::cout << "SnapprSwitch handle payload addr: " << addr() <<"\n\t inport: " << inport << "\n";
   pkt->setInport(inport);
   pkt->saveInputVirtualLane();
   Router* rtr = routers_[pkt->qos()];
   rtr->route(pkt);
   int vl = rtr->vlOffset() + pkt->deadlockVC();
+  printf("vl = %d + %d", rtr->vlOffset(), pkt->deadlockVC());
   pkt->setVirtualLane(vl);
 
   SnapprOutPort* p = outports_[pkt->nextPort()];
@@ -288,20 +286,18 @@ SnapprSwitch::handlePayload(SnapprPacket* pkt, int inport)
 std::string
 SnapprSwitch::toString() const
 {
-  return sprockit::sprintf("snappr switch %d", int(my_addr_));
+  return sprockit::sprintf("snappr switch %d\n", int(my_addr_));
 }
 
 LinkHandler*
 SnapprSwitch::creditHandler(int port)
 {
-  switch_debug("returning credit handler on output port %d", port);
   return newLinkHandler(outports_[port], &SnapprOutPort::handle);
 }
 
 LinkHandler*
 SnapprSwitch::payloadHandler(int port)
 {
-  switch_debug("returning payload handler on input port %d", port);
   return newLinkHandler(&inports_[port], &SnapprInPort::handle);
 }
 

@@ -1,14 +1,14 @@
 /**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
+Copyright 2009-2021 National Technology and Engineering Solutions of Sandia, 
+LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S.  Government 
 retains certain rights in this software.
 
 Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
+by National Technology and Engineering Solutions of Sandia, LLC., a wholly 
+owned subsidiary of Honeywell International, Inc., for the U.S. Department of 
 Energy's National Nuclear Security Administration under contract DE-NA0003525.
 
-Copyright (c) 2009-2022, NTESS
+Copyright (c) 2009-2021, NTESS
 
 All rights reserved.
 
@@ -56,13 +56,13 @@ Questions? Contact sst-macro-help@sandia.gov
 #include <sprockit/util.h>
 #include <sprockit/sim_parameters.h>
 #include <sprockit/keyword_registration.h>
-
+#include<stdio.h>
 #include <limits>
 
 #include <stddef.h>
 
 #define pkt_debug(...) \
-  debug_printf(sprockit::dbg::snappr | sprockit::dbg::nic, "snappr NIC on node %d: %s", \
+   printf(sprockit::dbg::snappr | sprockit::dbg::nic, "snappr NIC on node %d: %s\n", \
     int(addr()), sprockit::sprintf(__VA_ARGS__).c_str())
 
 
@@ -223,7 +223,7 @@ SnapprNIC::copyToNicBuffer()
     uint64_t bytes_left = payload->byteLength() - byte_offset;
     uint32_t pkt_size = std::min(bytes_left, uint64_t(packet_size_));
     if (pkt_size <= buffer_remaining_){
-      nic_debug("packet of size=%" PRIu32 " at offset=%" PRIu64 " ready to inject: %s",
+      printf("packet of size=%d at offset=%d ready to inject: %s\n",
                 pkt_size, byte_offset, payload->toString().c_str());
       //if flow control is off we won't get credits
       //so just don't worry about buffer space
@@ -231,6 +231,7 @@ SnapprNIC::copyToNicBuffer()
         buffer_remaining_ -= pkt_size;
       }
       if (ignore_memory_){
+        printf("SnapprNic ignore memory\n");
         injectPacket(pkt_size, byte_offset, payload);
       } else {
         SnapprRequest* req = new SnapprRequest;
@@ -246,7 +247,7 @@ SnapprNIC::copyToNicBuffer()
         inject_queue_->adjustTop(byte_offset + pkt_size);
       }
     } else {
-      nic_debug("packet of size=%" PRIu32 " at offset=%" PRIu64 " lacks buffer space to inject: %s",
+      printf("packet of size=%d at offset=%d lacks buffer space to inject: %s\n",
                 pkt_size, byte_offset, payload->toString().c_str());
       break; //no more room in NIC buffer
     }
@@ -291,7 +292,7 @@ SnapprNIC::eject(SnapprPacket* pkt)
     pkt->accumulateCongestionDelay(ejection_delay);
   }
 
-  pkt_debug("incoming packet - ejection next free at t=%8.4e: %s",
+  printf("incoming packet - ejection next free at t=%8.4e: %s\n",
             ej_next_free_.sec(), pkt->toString().c_str());
   TimeDelta time_to_send; //TODO = pkt->byteLength() * inj_byte_delay_;
   ej_next_free_ = ej_next_free_ + time_to_send;
@@ -309,7 +310,7 @@ SnapprNIC::eject(SnapprPacket* pkt)
   sendExecutionEvent(ej_next_free_, qev);
   if (flow_control_){
     auto* credit = new SnapprCredit(pkt->byteLength(), pkt->virtualLane(), switch_outport_);
-    pkt_debug("crediting with switch port %d:%d for %" PRIu64 " offset=%" PRIu64,
+    printf("crediting with switch port %d:%d for %d offset=%d\n",
               switch_outport_, pkt->virtualLane(), pkt->flowId(), pkt->offset());
     credit_link_->send(credit);
   }
@@ -318,6 +319,7 @@ SnapprNIC::eject(SnapprPacket* pkt)
 void
 SnapprNIC::handlePayload(Event *ev)
 {
+  printf("SnapprNIC handle payload\n");
   SnapprPacket* pkt = static_cast<SnapprPacket*>(ev);
   if (pkt->deadlocked()){
     std::cerr << "NIC " << addr() << " is part of deadlock" << std::endl;
@@ -327,7 +329,7 @@ SnapprNIC::handlePayload(Event *ev)
 
   TimeDelta time_to_send = pkt->byteLength() * inj_byte_delay_;
   if (time_to_send < pkt->timeToSend()){
-    pkt_debug("delaying packet ejection - time to arrive=%10.4e, time to inject=%10.4e: %s",
+    printf("delaying packet ejection - time to arrive=%10.4e, time to inject=%10.4e: %s\n",
               pkt->timeToSend().sec(), time_to_send.sec(), pkt->toString().c_str());
     //tail flit cannot arrive here before it leaves the prev switch
     auto ev = newCallback(this, &SnapprNIC::eject, pkt);
@@ -343,16 +345,18 @@ SnapprNIC::handleCredit(Event *ev)
 {
   SnapprCredit* credit = static_cast<SnapprCredit*>(ev);
   buffer_remaining_ += credit->numBytes();
-  nic_debug("received %" PRIu32 " credits, buffer now %" PRIu64,
-            credit->numBytes(), buffer_remaining_);
+  //printf("received %" PRIu32 " credits, buffer now %" PRIu64 "\n",
+  //          credit->numBytes(), buffer_remaining_);
   copyToNicBuffer();
   //this transfers ownership - don't delete here
+  printf("SnapprNic:: credit->port %d", credit->port());
   outports_[credit->port()]->handleCredit(credit);
 }
 
 void
 SnapprNIC::handleTailPacket(Timestamp done, SnapprPacket* pkt)
 {
+  printf("handling tail packet\n");
   NetworkMessage* payload = static_cast<NetworkMessage*>(pkt->flow());
   TimeDelta min_send_delay = payload->byteLength() * inj_byte_delay_;
   TimeDelta actual_delay = done - payload->injectionStarted();
@@ -372,13 +376,14 @@ SnapprNIC::injectPacket(uint32_t  /*ptk_size*/, uint64_t byte_offset, NetworkMes
 {
   uint64_t bytes_left = payload->byteLength() - byte_offset;
   uint32_t pkt_size = std::min(bytes_left, uint64_t(packet_size_));
-  bool is_tail = bytes_left == pkt_size;
+  bool is_tail = (bytes_left == pkt_size);
   NodeId to = payload->toaddr();
   NodeId from = payload->fromaddr();
   uint64_t fid = payload->flowId();
-
+  printf("Payload convert to packet: \n\t len %d \n\t byte_offset %d \n\t pkt_size %d \n\t to %d \n\t from %d \n\t fid %d \n %d\n", payload->byteLength(), byte_offset, pkt_size, to, from, fid, is_tail);
   int qos = payload->qos();
   if (rdma_get_req_qos_ != -1 && payload->type() == NetworkMessage::rdma_get_request){
+    spkt_abort_printf("rdma get req qos\n");
     qos = rdma_get_req_qos_;
   }
   if (qos >= qos_levels_){
@@ -387,9 +392,11 @@ SnapprNIC::injectPacket(uint32_t  /*ptk_size*/, uint64_t byte_offset, NetworkMes
   SnapprPacket* pkt = new SnapprPacket(is_tail ? payload : nullptr, pkt_size, is_tail,
                                        fid, byte_offset, to, from, qos);
   if (scatter_qos_){
+    printf("SnapprNIC: setVirtualLane scatter qos %d, qos_levels_ %d \n", next_qos_, qos_levels_);
     pkt->setVirtualLane(next_qos_);
     next_qos_ = (next_qos_ + 1) % qos_levels_;
   } else {
+    printf("SnapprNIC: setVirtualLane else qos %d\n", payload->qos());
     pkt->setVirtualLane(payload->qos());
   }
 
@@ -401,7 +408,7 @@ void
 SnapprNIC::handleMemoryResponse(MemoryModel::Request* req)
 {
   SnapprRequest* nreq = static_cast<SnapprRequest*>(req);
-  nic_debug("received memory response for offset %" PRIu64 " for payload %s",
+  printf("SnapprNIC::received memory response for offset %" PRIu64 " for payload %s\n",
             nreq->offset, nreq->payload->toString().c_str());
   injectPacket(req->bytes, nreq->offset, nreq->payload);
   delete nreq;
@@ -524,6 +531,7 @@ struct RoundRobinQueue : public SnapprNIC::InjectionQueue {
   }
 
   void insert(uint64_t bytes, NetworkMessage* msg) override {
+    printf("Inserting into NICqueue \n");
     queue_[end_] = {bytes,msg};
     end_++;
     if (end_ == queue_.size()){
