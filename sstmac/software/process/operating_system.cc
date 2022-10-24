@@ -1,14 +1,14 @@
 /**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
+Copyright 2009-2021 National Technology and Engineering Solutions of Sandia, 
+LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S.  Government 
 retains certain rights in this software.
 
 Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
+by National Technology and Engineering Solutions of Sandia, LLC., a wholly 
+owned subsidiary of Honeywell International, Inc., for the U.S. Department of 
 Energy's National Nuclear Security Administration under contract DE-NA0003525.
 
-Copyright (c) 2009-2022, NTESS
+Copyright (c) 2009-2021, NTESS
 
 All rights reserved.
 
@@ -216,12 +216,13 @@ OperatingSystem::allocateCore(Thread *thr)
 {
   os_debug("attempting to reserve core for thread %d", thr->threadId());
   compute_sched_->reserveCores(1, thr);
-  os_debug("successfully reserved core for thread %d");
+  printf("successfully reserved core for thread %d \n",thr->threadId());
 }
 
 void
 OperatingSystem::deallocateCore(Thread *thr)
 {
+  printf("Deallocate core for thread %d \n",thr->threadId());
   compute_sched_->releaseCores(1, thr);
 }
 
@@ -342,12 +343,14 @@ OperatingSystem::compute(TimeDelta t)
 std::function<void(hw::NetworkMessage*)>
 OperatingSystem::nicDataIoctl()
 {
+  printf("nicDataIoctl\n");
   return node_->nic()->dataIoctl();
 }
 
 std::function<void(hw::NetworkMessage*)>
 OperatingSystem::nicCtrlIoctl()
 {
+  printf("nicDataIoctl\n");
   return node_->nic()->ctrlIoctl();
 }
 
@@ -411,13 +414,14 @@ void
 OperatingSystem::switchToThread(Thread* tothread)
 {
   if (active_thread_ != nullptr){ //not an error
+    printf("weird if statement \n");
     //but this must be thrown over to the DES context to actually execute
     //we cannot context switch directly from subthread to subthread
     sendExecutionEventNow(newCallback(this, &OperatingSystem::switchToThread, tothread));
     return;
   }
 
-  os_debug("switching to thread %d", tothread->threadId());
+ printf("SwitchToThread: switching to thread %d \n", tothread->threadId());
   if (active_thread_ == blocked_thread_){
     blocked_thread_ = nullptr;
   }
@@ -425,7 +429,7 @@ OperatingSystem::switchToThread(Thread* tothread)
   activeOs() = this;
   tothread->context()->resumeContext(des_context_);
 
-  os_debug("switched back from thread %d to main thread", tothread->threadId());
+  printf("SwitchToThread: back from thread %d to main thread \n", tothread->threadId());
 
   /** back to main thread */
   active_thread_ = nullptr;
@@ -454,6 +458,7 @@ OperatingSystem::reassignCores(Thread *thr)
 void
 OperatingSystem::block()
 {
+ printf("BLOCK: pausing context on thread %d\n", active_thread_->threadId());
   Timestamp before = now();
   //back to main DES thread
   ThreadContext* old_context = active_thread_->context();
@@ -474,6 +479,7 @@ OperatingSystem::block()
 
   //restore state to indicate this thread and this OS are active again
   activeOs() = this;
+  printf("BLOCK: resuming context on thread %d\n", active_thread_->threadId());
   os_debug("resuming context on thread %d", active_thread_->threadId());
   active_thread_ = old_thread;
   active_thread_->incrementBlockCounter();
@@ -517,8 +523,10 @@ OperatingSystem::unblock(Thread* thr)
   if (thr->isCanceled()){
     //just straight up delete the thread
     //it shall be neither seen nor heard
+    printf("UNBLOCK: Deleting thread %d\n", thr->threadId());
     delete thr;
   } else {
+    printf("UNBLOCK Switching to thread %d\n", thr->threadId());
     switchToThread(thr);
   }
 }
@@ -563,10 +571,10 @@ OperatingSystem::completeActiveThread()
   Thread* thr_todelete = active_thread_;
 
   //if any threads waiting on the join, unblock them
-  os_debug("completing thread %ld", thr_todelete->threadId());
+  printf("completing thread %ld\n", thr_todelete->threadId());
   while (!thr_todelete->joiners_.empty()) {
     Thread* blocker = thr_todelete->joiners_.front();
-    os_debug("thread %ld is unblocking joiner %p",
+    printf("thread %ld is unblocking joiner %p \n",
         thr_todelete->threadId(), blocker);
     unblock(blocker);
     //to_awake_.push(thr_todelete->joiners_.front());
@@ -574,7 +582,7 @@ OperatingSystem::completeActiveThread()
   }
   active_thread_ = nullptr;
 
-  os_debug("completing context for %ld", thr_todelete->threadId());
+  printf("completing context for %ld\n", thr_todelete->threadId());
   thr_todelete->context()->completeContext(des_context_);
 }
 
